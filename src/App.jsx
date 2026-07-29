@@ -12,18 +12,18 @@ import {
 import { supabase } from "./lib/supabase";
 import { useHouseholdState } from "./lib/useHouseholdState";
 import AuthGate from "./AuthGate";
+import couple from "./couple.jpg";
 
 /* =========================================================================
    AJ & MELISSA — HOUSEHOLD LEDGER
-   Shared. Monochrome. Editorial.
-   Categories: Event / Travel / Other
+   Shared. Monochrome. Categories: Event / Travel / Other
    ========================================================================= */
 
 let _id = 0;
 const nid = () => `n${Date.now()}_${_id++}`;
 
 const SEED = {
-  version: 3,
+  version: 4,
   events: {
     "2026-07-04": [{ id: "e1", text: "Pippa's birthday", cat: "event" }],
     "2026-07-08": [{ id: "e2", text: "Elise · 4:30 PM", cat: "other" }],
@@ -65,22 +65,41 @@ const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 const SANS = "'Schibsted Grotesk', -apple-system, 'Helvetica Neue', sans-serif";
 const SERIF = "'Instrument Serif', Georgia, serif";
 
-/* three categories, three distinct monochrome textures */
 const CATS = ["event", "travel", "other"];
 const CAT_LABEL = { event: "Event", travel: "Travel", other: "Other" };
 
-const HATCH = `repeating-linear-gradient(45deg, ${INK} 0 1.5px, transparent 1.5px 5px)`;
+/* diagonal hatch used for Travel */
+const HATCH_DARK = `repeating-linear-gradient(45deg, ${INK} 0, ${INK} 1.5px, transparent 1.5px, transparent 5px)`;
+const HATCH_SOFT = `repeating-linear-gradient(45deg, #B9C0C7 0, #B9C0C7 1px, transparent 1px, transparent 4px)`;
 
-const catChip = {
-  event: { background: INK, color: "#FFFFFF", border: `1px solid ${INK}` },
-  travel: {
-    backgroundColor: "#FFFFFF",
-    backgroundImage: `repeating-linear-gradient(45deg, #C9CFD5 0 1px, transparent 1px 4px)`,
-    color: INK,
-    border: `1px solid ${INK}`,
-  },
-  other: { background: PAPER, color: SLATE, border: `1px solid ${LINE}` },
-};
+/* every property written explicitly — no shorthand/longhand mixing */
+function chipStyle(cat, pos) {
+  const isEvent = cat === "event";
+  const isTravel = cat === "travel";
+  const edge = isEvent || isTravel ? INK : LINE;
+  const openLeft = pos === "mid" || pos === "end";
+  const openRight = pos === "mid" || pos === "start";
+  return {
+    color: isEvent ? "#FFFFFF" : INK,
+    backgroundColor: isEvent ? INK : "#FFFFFF",
+    backgroundImage: isTravel ? HATCH_SOFT : "none",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderLeftWidth: openLeft ? 0 : 1,
+    borderRightWidth: openRight ? 0 : 1,
+    borderStyle: "solid",
+    borderColor: edge,
+    borderTopLeftRadius: openLeft ? 0 : 2,
+    borderBottomLeftRadius: openLeft ? 0 : 2,
+    borderTopRightRadius: openRight ? 0 : 2,
+    borderBottomRightRadius: openRight ? 0 : 2,
+    fontSize: 10.5,
+    lineHeight: "15px",
+    padding: "1px 5px",
+    minHeight: 17,
+    fontWeight: isTravel ? 500 : 400,
+  };
+}
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOW = ["S", "M", "T", "W", "T", "F", "S"];
@@ -104,7 +123,6 @@ const isoWeek = (dt) => {
   const y0 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil(((d - y0) / 86400000 + 1) / 7);
 };
-/* old records used `urgency`; anything unclassified reads as an Event */
 const catOf = (e) => (CATS.includes(e.cat) ? e.cat : "event");
 
 /* ---------- small pieces ------------------------------------------------ */
@@ -125,30 +143,26 @@ const Label = ({ children, style }) => (
 );
 
 const CatMark = ({ cat, onClick, size = 9 }) => {
-  const base = {
-    width: size,
-    height: size,
-    borderRadius: 2,
-    cursor: onClick ? "pointer" : "default",
-    padding: 0,
-    flexShrink: 0,
-    display: "block",
-  };
-  const styles = {
-    event: { ...base, background: INK, border: `1.5px solid ${INK}` },
-    travel: {
-      ...base,
-      backgroundColor: PAPER,
-      backgroundImage: HATCH,
-      border: `1.5px solid ${INK}`,
-    },
-    other: { ...base, background: "transparent", border: `1.5px solid #B4BBC3` },
-  };
+  const isEvent = cat === "event";
+  const isTravel = cat === "travel";
   return (
     <button
       onClick={onClick}
       title={onClick ? `${CAT_LABEL[cat]} — click to change` : CAT_LABEL[cat]}
-      style={styles[cat] || styles.other}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 2,
+        backgroundColor: isEvent ? INK : "transparent",
+        backgroundImage: isTravel ? HATCH_DARK : "none",
+        borderWidth: 1.5,
+        borderStyle: "solid",
+        borderColor: isEvent || isTravel ? INK : "#B4BBC3",
+        cursor: onClick ? "pointer" : "default",
+        padding: 0,
+        flexShrink: 0,
+        display: "block",
+      }}
     />
   );
 };
@@ -193,8 +207,8 @@ function HouseholdLedger() {
       if (d.getFullYear() === cal.y && d.getMonth() === cal.m) month += (list || []).length;
     });
     return {
-      tasks: state.checklist.filter((c) => !c.done).length,
-      reminders: state.reminders.filter((r) => !r.done).length,
+      tasks: (state.checklist || []).filter((c) => !c.done).length,
+      reminders: (state.reminders || []).filter((r) => !r.done).length,
       month,
     };
   }, [state, cal]);
@@ -214,8 +228,8 @@ function HouseholdLedger() {
     const d = parseKey(e.key);
     const diff = Math.round((d.getTime() - t0) / 86400000);
     const when = diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : `In ${diff} days`;
-    const dateline = `${DOW_FULL[d.getDay()].slice(0, 3)} · ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
-    return { text: e.text, when, dateline, cat: catOf(e) };
+    const dateline = `${DOW_FULL[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
+    return { text: e.text, when, dateline };
   }, [state, todayKey]);
 
   const week = useMemo(() => {
@@ -316,7 +330,6 @@ function HouseholdLedger() {
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const monthHasEvents = counts.month > 0;
   const selDate = parseKey(selected);
   const selNice = `${DOW_FULL[selDate.getDay()]}, ${MONTHS[selDate.getMonth()]} ${selDate.getDate()}`;
 
@@ -333,7 +346,7 @@ function HouseholdLedger() {
         @media print { .no-print { display: none !important; } }
       `}</style>
 
-      <div className="max-w-5xl mx-auto px-5 sm:px-8 pb-20">
+      <div className="max-w-6xl mx-auto px-5 sm:px-8 pb-20">
 
         {/* ---------- DATELINE ---------- */}
         <div className="pt-7 pb-2 flex items-center justify-between"
@@ -345,53 +358,59 @@ function HouseholdLedger() {
         </div>
 
         {/* ---------- MASTHEAD ---------- */}
-        <header className="pt-8 pb-6">
-          <h1 style={{
-            fontSize: "clamp(38px, 8vw, 72px)",
-            lineHeight: 0.9,
-            letterSpacing: "-0.035em",
-            fontWeight: 300,
-          }}>
-            AJ{" "}
-            <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400 }}>&</span>{" "}
-            <span style={{ fontWeight: 600 }}>Melissa</span>
-          </h1>
-          <Label style={{ letterSpacing: "0.34em", display: "block", marginTop: 12 }}>
-            Household ledger
-          </Label>
+        <header className="pt-8 pb-6 flex items-center gap-5 sm:gap-7">
+          <img
+            src={couple}
+            alt="AJ and Melissa"
+            style={{
+              width: "clamp(58px, 11vw, 92px)",
+              height: "clamp(58px, 11vw, 92px)",
+              objectFit: "cover",
+              objectPosition: "center 22%",
+              borderRadius: 2,
+              filter: "grayscale(100%)",
+              borderWidth: 1,
+              borderStyle: "solid",
+              borderColor: INK,
+              flexShrink: 0,
+            }}
+          />
+          <div className="min-w-0">
+            <h1 style={{
+              fontSize: "clamp(32px, 7vw, 62px)",
+              lineHeight: 0.9,
+              letterSpacing: "-0.035em",
+              fontWeight: 300,
+            }}>
+              AJ{" "}
+              <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400 }}>&</span>{" "}
+              <span style={{ fontWeight: 600 }}>Melissa</span>
+            </h1>
+            <Label style={{ letterSpacing: "0.34em", display: "block", marginTop: 11 }}>
+              Household ledger
+            </Label>
+          </div>
         </header>
 
         <div style={{ borderTop: `2px solid ${INK}`, marginBottom: 2 }} />
         <div style={{ borderTop: `1px solid ${INK}` }} />
 
-        {/* ---------- NEXT UP — inverted hero ---------- */}
+        {/* ---------- NEXT UP — slim bar, uniform type ---------- */}
         {nextUp && (
           <div
-            className="flex items-end justify-between gap-6 flex-wrap"
-            style={{ background: INK, color: PAPER, padding: "22px 22px 20px" }}
+            className="flex items-center justify-between gap-4 flex-wrap"
+            style={{ background: INK, color: PAPER, padding: "11px 16px" }}
           >
-            <div className="min-w-0">
-              <Label style={{ color: "rgba(255,255,255,.45)" }}>Next up</Label>
-              <div
-                className="mt-2"
-                style={{
-                  fontFamily: SERIF,
-                  fontSize: "clamp(24px, 4.4vw, 38px)",
-                  lineHeight: 1.05,
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {nextUp.text}
-              </div>
+            <div className="flex items-baseline gap-3 min-w-0">
+              <Label style={{ color: "rgba(255,255,255,.45)", flexShrink: 0 }}>Next</Label>
+              <span style={{ fontSize: 13, lineHeight: 1.4 }}>{nextUp.text}</span>
             </div>
-            <div className="text-right flex-shrink-0">
-              <div style={{ fontFamily: MONO, fontSize: 15, letterSpacing: "0.04em" }}>
-                {nextUp.when}
-              </div>
-              <Label style={{ color: "rgba(255,255,255,.45)", display: "block", marginTop: 5 }}>
-                {nextUp.dateline}
-              </Label>
-            </div>
+            <span style={{
+              fontFamily: MONO, fontSize: 13, lineHeight: 1.4,
+              color: "rgba(255,255,255,.8)", flexShrink: 0,
+            }}>
+              {nextUp.when} · {nextUp.dateline}
+            </span>
           </div>
         )}
 
@@ -408,7 +427,7 @@ function HouseholdLedger() {
                 paddingLeft: i === 0 ? 0 : 16,
               }}>
               <div style={{
-                fontFamily: MONO, fontSize: 32, lineHeight: 1,
+                fontFamily: MONO, fontSize: 30, lineHeight: 1,
                 color: n === 0 ? MUTE : INK,
               }}>
                 {String(n).padStart(2, "0")}
@@ -433,8 +452,8 @@ function HouseholdLedger() {
                   }}
                   className="text-left"
                   style={{
-                    background: isToday ? INK : PAPER,
-                    color: isToday ? "#fff" : INK,
+                    backgroundColor: isToday ? INK : PAPER,
+                    color: isToday ? "#FFFFFF" : INK,
                     padding: "10px 8px",
                     minHeight: 88,
                     border: "none",
@@ -450,7 +469,7 @@ function HouseholdLedger() {
                   </div>
                   <div style={{
                     fontFamily: MONO, fontSize: 18, marginTop: 2,
-                    color: isToday ? "#fff" : items.length ? INK : MUTE,
+                    color: isToday ? "#FFFFFF" : items.length ? INK : MUTE,
                   }}>
                     {dt.getDate()}
                   </div>
@@ -458,7 +477,7 @@ function HouseholdLedger() {
                     {items.slice(0, 2).map((e, i) => (
                       <div key={e.id + i} className="truncate"
                         style={{
-                          fontSize: 9.5, lineHeight: "12px",
+                          fontSize: 10, lineHeight: "13px",
                           color: isToday ? "rgba(255,255,255,.85)" : SLATE,
                         }}>
                         {e.showText ? e.text : "·"}
@@ -471,27 +490,18 @@ function HouseholdLedger() {
           </div>
         </section>
 
-        {/* ---------- BODY ---------- */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-10 lg:gap-14 mt-12">
+        {/* ---------- BODY : calendar 5/7, rail 2/7 ---------- */}
+        <div className="grid grid-cols-1 lg:grid-cols-7 gap-10 lg:gap-12 mt-12">
 
           {/* CALENDAR */}
-          <section className="lg:col-span-3">
-
+          <section className="lg:col-span-5">
             <div className="flex items-end justify-between">
-              <div className="flex items-baseline gap-4">
-                <span style={{
-                  fontFamily: MONO, fontSize: 46, lineHeight: 0.85,
-                  letterSpacing: "-0.04em", color: HAIR,
-                }}>
-                  {String(cal.m + 1).padStart(2, "0")}
+              <h2 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.02em" }}>
+                {MONTHS[cal.m]}{" "}
+                <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: SLATE }}>
+                  {cal.y}
                 </span>
-                <h2 style={{ fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>
-                  {MONTHS[cal.m]}{" "}
-                  <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: SLATE }}>
-                    {cal.y}
-                  </span>
-                </h2>
-              </div>
+              </h2>
               <div className="flex items-center gap-1 no-print">
                 <button onClick={goToday}
                   style={{
@@ -504,11 +514,11 @@ function HouseholdLedger() {
                 </button>
                 <button onClick={() => goMonth(-1)} aria-label="Previous month" className="p-2"
                   style={{ color: SLATE, background: "none", border: "none", cursor: "pointer" }}>
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={17} />
                 </button>
                 <button onClick={() => goMonth(1)} aria-label="Next month" className="p-2"
                   style={{ color: SLATE, background: "none", border: "none", cursor: "pointer" }}>
-                  <ChevronRight size={16} />
+                  <ChevronRight size={17} />
                 </button>
               </div>
             </div>
@@ -516,7 +526,7 @@ function HouseholdLedger() {
             <div className="grid grid-cols-7 mt-5">
               {DOW.map((d, i) => (
                 <div key={i} className="text-center pb-2"
-                  style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.2em", color: MUTE }}>
+                  style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.2em", color: MUTE }}>
                   {d}
                 </div>
               ))}
@@ -531,7 +541,7 @@ function HouseholdLedger() {
                   return (
                     <div key={i} style={{
                       borderRight: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`,
-                      background: FIELD, minHeight: 84,
+                      backgroundColor: FIELD, minHeight: 104,
                     }} />
                   );
                 const key = dkey(cal.y, cal.m, day);
@@ -546,9 +556,9 @@ function HouseholdLedger() {
                     style={{
                       borderRight: `1px solid ${LINE}`,
                       borderBottom: `1px solid ${LINE}`,
-                      minHeight: 84,
-                      padding: "6px 5px",
-                      background: isSel ? FIELD : weekend ? TINT : PAPER,
+                      minHeight: 104,
+                      padding: "7px 6px",
+                      backgroundColor: isSel ? FIELD : weekend ? TINT : PAPER,
                       boxShadow: isSel ? `inset 0 0 0 1.5px ${INK}` : "none",
                       cursor: "pointer",
                       display: "block",
@@ -557,55 +567,37 @@ function HouseholdLedger() {
                   >
                     <div className="flex items-center justify-between">
                       <span style={{
-                        fontFamily: MONO, fontSize: 10.5,
+                        fontFamily: MONO, fontSize: 11.5,
                         fontWeight: isToday ? 500 : 400,
                         color: evts.length ? INK : MUTE,
                       }}>
                         {String(day).padStart(2, "0")}
                       </span>
                       {isToday && (
-                        <span style={{ width: 14, height: 2, background: INK, display: "block", borderRadius: 1 }} />
+                        <span style={{
+                          width: 15, height: 2, backgroundColor: INK,
+                          display: "block", borderRadius: 1,
+                        }} />
                       )}
                     </div>
 
-                    <div className="flex gap-1 mt-1.5 sm:hidden flex-wrap">
+                    {/* mobile marks */}
+                    <div className="flex gap-1 mt-2 sm:hidden flex-wrap">
                       {evts.slice(0, 4).map((e, k) => (
                         <CatMark key={e.id + k} cat={e.cat} size={6} />
                       ))}
                     </div>
 
-                    <div className="hidden sm:flex flex-col gap-1 mt-1.5">
-                      {evts.slice(0, 2).map((e, k) => {
-                        const s = catChip[e.cat] || catChip.other;
-                        const radius =
-                          e.pos === "solo" ? "2px" :
-                          e.pos === "start" ? "2px 0 0 2px" :
-                          e.pos === "end" ? "0 2px 2px 0" : "0";
-                        return (
-                          <div key={e.id + k} className="truncate"
-                            style={{
-                              background: s.background,
-                              backgroundColor: s.backgroundColor,
-                              backgroundImage: s.backgroundImage,
-                              color: s.color,
-                              borderTop: s.border,
-                              borderBottom: s.border,
-                              borderLeft: e.pos === "mid" || e.pos === "end" ? "none" : s.border,
-                              borderRight: e.pos === "mid" || e.pos === "start" ? "none" : s.border,
-                              fontSize: 9.5,
-                              lineHeight: "14px",
-                              borderRadius: radius,
-                              padding: "1px 5px",
-                              minHeight: 16,
-                              fontWeight: e.cat === "travel" ? 500 : 400,
-                            }}>
-                            {e.showText ? e.text : "\u00A0"}
-                          </div>
-                        );
-                      })}
-                      {evts.length > 2 && (
-                        <div style={{ fontFamily: MONO, fontSize: 8.5, color: MUTE }}>
-                          +{evts.length - 2}
+                    {/* desktop chips */}
+                    <div className="hidden sm:flex flex-col gap-1 mt-2">
+                      {evts.slice(0, 3).map((e, k) => (
+                        <div key={e.id + k} className="truncate" style={chipStyle(e.cat, e.pos)}>
+                          {e.showText ? e.text : "\u00A0"}
+                        </div>
+                      ))}
+                      {evts.length > 3 && (
+                        <div style={{ fontFamily: MONO, fontSize: 9, color: MUTE }}>
+                          +{evts.length - 3}
                         </div>
                       )}
                     </div>
@@ -624,7 +616,7 @@ function HouseholdLedger() {
               ))}
             </div>
 
-            {!monthHasEvents && (
+            {counts.month === 0 && (
               <div className="text-center py-9">
                 <span style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 20, color: MUTE }}>
                   The month is open.
@@ -643,7 +635,7 @@ function HouseholdLedger() {
           </section>
 
           {/* RAIL */}
-          <aside className="lg:col-span-2 flex flex-col gap-12">
+          <aside className="lg:col-span-2 flex flex-col gap-10">
 
             <Panel numeral="II" title="Checklist" open={counts.tasks}>
               <ItemGroup
@@ -656,7 +648,7 @@ function HouseholdLedger() {
                 )}
               />
               <QuickAdd
-                placeholder="New checklist item…"
+                placeholder="New item…"
                 onAdd={(text) => addTo("checklist", { id: nid(), text, done: false })}
               />
             </Panel>
@@ -735,11 +727,11 @@ function Panel({ numeral, title, open, children }) {
   return (
     <section>
       <div className="flex items-baseline justify-between pb-2" style={{ borderBottom: `1px solid ${INK}` }}>
-        <div className="flex items-baseline gap-3">
-          <span style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, color: MUTE }}>
+        <div className="flex items-baseline gap-2.5">
+          <span style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 15, color: MUTE }}>
             {numeral}.
           </span>
-          <h2 style={{ fontSize: 16, fontWeight: 600 }}>{title}</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600 }}>{title}</h2>
         </div>
         <span style={{ fontFamily: MONO, fontSize: 10, color: MUTE }}>
           {String(open).padStart(2, "0")}
@@ -755,7 +747,7 @@ function ItemGroup({ items, settled, renderItem }) {
   return (
     <>
       {items.length === 0 && settled.length === 0 && (
-        <div className="py-4" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 15, color: MUTE }}>
+        <div className="py-4" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 14, color: MUTE }}>
           Nothing here yet.
         </div>
       )}
@@ -766,11 +758,11 @@ function ItemGroup({ items, settled, renderItem }) {
           <button onClick={() => setShowSettled((v) => !v)}
             className="flex items-center gap-2"
             style={{
-              fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.18em",
+              fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em",
               textTransform: "uppercase", color: MUTE, background: "none",
               border: "none", cursor: "pointer", padding: 0,
             }}>
-            <ChevronDown size={12}
+            <ChevronDown size={11}
               style={{
                 transform: showSettled ? "rotate(0deg)" : "rotate(-90deg)",
                 transition: "transform 150ms",
@@ -788,10 +780,10 @@ function ItemGroup({ items, settled, renderItem }) {
 
 function CheckRow({ item, index, onToggle, onDelete }) {
   return (
-    <div className="py-3 flex items-start gap-3 group" style={{ borderBottom: `1px solid ${HAIR}` }}>
+    <div className="py-2.5 flex items-start gap-2.5 group" style={{ borderBottom: `1px solid ${HAIR}` }}>
       <span style={{
-        fontFamily: MONO, fontSize: 9, color: MUTE, marginTop: 4,
-        minWidth: 16, flexShrink: 0,
+        fontFamily: MONO, fontSize: 8.5, color: MUTE, marginTop: 4,
+        minWidth: 14, flexShrink: 0,
       }}>
         {String((index ?? 0) + 1).padStart(2, "0")}
       </span>
@@ -799,16 +791,17 @@ function CheckRow({ item, index, onToggle, onDelete }) {
         aria-label={item.done ? "Mark incomplete" : "Mark complete"}
         className="flex-shrink-0 flex items-center justify-center"
         style={{
-          width: 16, height: 16, marginTop: 2, borderRadius: 2,
-          border: `1.5px solid ${item.done ? INK : "#B4BBC3"}`,
-          background: item.done ? INK : "transparent",
+          width: 15, height: 15, marginTop: 2, borderRadius: 2,
+          borderWidth: 1.5, borderStyle: "solid",
+          borderColor: item.done ? INK : "#B4BBC3",
+          backgroundColor: item.done ? INK : "transparent",
           cursor: "pointer", padding: 0,
         }}>
-        {item.done && <Check size={11} color="#fff" strokeWidth={3} />}
+        {item.done && <Check size={10} color="#fff" strokeWidth={3} />}
       </button>
       <div className="flex-1 min-w-0"
         style={{
-          fontSize: 14.5, lineHeight: 1.45,
+          fontSize: 13.5, lineHeight: 1.42,
           textDecoration: item.done ? "line-through" : "none",
           textDecorationColor: MUTE,
           opacity: item.done ? 0.38 : 1,
@@ -816,15 +809,15 @@ function CheckRow({ item, index, onToggle, onDelete }) {
         {item.text}
         {item.link && (
           <a href={item.link} target="_blank" rel="noreferrer"
-            className="inline-flex items-center ml-2 align-middle" style={{ color: SLATE }}>
-            <ExternalLink size={12} />
+            className="inline-flex items-center ml-1.5 align-middle" style={{ color: SLATE }}>
+            <ExternalLink size={11} />
           </a>
         )}
       </div>
       <button onClick={onDelete} aria-label="Delete item"
         className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 no-print"
         style={{ color: MUTE, background: "none", border: "none", cursor: "pointer", padding: 2 }}>
-        <X size={13} />
+        <X size={12} />
       </button>
     </div>
   );
@@ -846,11 +839,11 @@ function QuickAdd({ placeholder, onAdd }) {
       <button onClick={() => setOpen(true)}
         className="flex items-center gap-2 pt-3 no-print"
         style={{
-          fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.18em",
+          fontFamily: MONO, fontSize: 9, letterSpacing: "0.18em",
           textTransform: "uppercase", color: MUTE, background: "none",
           border: "none", cursor: "pointer",
         }}>
-        <Plus size={12} /> Add
+        <Plus size={11} /> Add
       </button>
     );
 
@@ -867,21 +860,22 @@ function QuickAdd({ placeholder, onAdd }) {
         placeholder={placeholder}
         className="flex-1 min-w-0"
         style={{
-          fontFamily: SANS, fontSize: 13.5, padding: "8px 10px",
-          border: `1px solid ${LINE}`, borderRadius: 2, background: FIELD, color: INK,
+          fontFamily: SANS, fontSize: 13, padding: "7px 9px",
+          border: `1px solid ${LINE}`, borderRadius: 2,
+          backgroundColor: FIELD, color: INK,
         }}
       />
       <button onClick={submit}
         style={{
-          fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.14em",
-          padding: "8px 12px", background: INK, color: "#fff",
+          fontFamily: MONO, fontSize: 9, letterSpacing: "0.14em",
+          padding: "7px 10px", backgroundColor: INK, color: "#fff",
           border: "none", borderRadius: 2, cursor: "pointer",
         }}>
         SAVE
       </button>
       <button onClick={() => setOpen(false)} aria-label="Cancel"
         style={{ color: MUTE, background: "none", border: "none", cursor: "pointer" }}>
-        <X size={14} />
+        <X size={13} />
       </button>
     </div>
   );
@@ -902,7 +896,7 @@ function DayEditor({ dateKey, nice, events, onAdd, onUpdate, onDelete }) {
   };
 
   return (
-    <div className="mt-8 p-4 sm:p-5" style={{ background: FIELD, borderRadius: 2 }}>
+    <div className="mt-8 p-4 sm:p-5" style={{ backgroundColor: FIELD, borderRadius: 2 }}>
       <Label>Planning · {nice}</Label>
 
       <div className="mt-3 flex flex-col gap-2">
@@ -921,7 +915,7 @@ function DayEditor({ dateKey, nice, events, onAdd, onUpdate, onDelete }) {
                 onChange={(ev) => onUpdate(dateKey, e.id, { text: ev.target.value })}
                 className="flex-1 min-w-0"
                 style={{
-                  fontFamily: SANS, fontSize: 13.5, background: "transparent",
+                  fontFamily: SANS, fontSize: 13.5, backgroundColor: "transparent",
                   border: "none", borderBottom: "1px solid transparent",
                   color: INK, padding: "2px 0",
                 }}
@@ -952,8 +946,8 @@ function DayEditor({ dateKey, nice, events, onAdd, onUpdate, onDelete }) {
           className="flex-1"
           style={{
             fontFamily: SANS, fontSize: 13.5, padding: "8px 10px",
-            border: `1px solid ${LINE}`, borderRadius: 2, background: PAPER,
-            minWidth: 140, color: INK,
+            border: `1px solid ${LINE}`, borderRadius: 2,
+            backgroundColor: PAPER, minWidth: 140, color: INK,
           }}
         />
         <div className="flex items-center gap-1.5">
@@ -966,15 +960,15 @@ function DayEditor({ dateKey, nice, events, onAdd, onUpdate, onDelete }) {
             onChange={(e) => setSpan(Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
             style={{
               fontFamily: MONO, fontSize: 12, width: 46, padding: "7px 6px",
-              border: `1px solid ${LINE}`, borderRadius: 2, background: PAPER,
-              color: INK, textAlign: "center",
+              border: `1px solid ${LINE}`, borderRadius: 2,
+              backgroundColor: PAPER, color: INK, textAlign: "center",
             }}
           />
         </div>
         <button onClick={submit}
           style={{
             fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.14em",
-            padding: "8px 12px", background: INK, color: "#fff",
+            padding: "8px 12px", backgroundColor: INK, color: "#fff",
             border: "none", borderRadius: 2, cursor: "pointer",
           }}>
           ADD
@@ -1004,7 +998,7 @@ function ResetControl({ onReset }) {
       <button onClick={onReset}
         style={{
           fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.14em", color: "#fff",
-          background: INK, border: "none", padding: "5px 12px", borderRadius: 2, cursor: "pointer",
+          backgroundColor: INK, border: "none", padding: "5px 12px", borderRadius: 2, cursor: "pointer",
         }}>
         CONFIRM
       </button>
