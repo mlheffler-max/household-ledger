@@ -366,7 +366,7 @@ function HouseholdLedger() {
               width: "clamp(58px, 11vw, 92px)",
               height: "clamp(58px, 11vw, 92px)",
               objectFit: "cover",
-              objectPosition: "center 22%",
+              objectPosition: "center center",
               borderRadius: 2,
               filter: "grayscale(100%)",
               borderWidth: 1,
@@ -413,29 +413,6 @@ function HouseholdLedger() {
             </span>
           </div>
         )}
-
-        {/* ---------- COUNTERS ---------- */}
-        <div className="grid grid-cols-3" style={{ borderBottom: `1px solid ${INK}` }}>
-          {[
-            ["Tasks open", counts.tasks],
-            ["Reminders", counts.reminders],
-            [`${MONTHS[cal.m].slice(0, 3)} entries`, counts.month],
-          ].map(([label, n], i) => (
-            <div key={label} className="py-4"
-              style={{
-                borderLeft: i === 0 ? "none" : `1px solid ${HAIR}`,
-                paddingLeft: i === 0 ? 0 : 16,
-              }}>
-              <div style={{
-                fontFamily: MONO, fontSize: 30, lineHeight: 1,
-                color: n === 0 ? MUTE : INK,
-              }}>
-                {String(n).padStart(2, "0")}
-              </div>
-              <Label style={{ display: "block", marginTop: 7 }}>{label}</Label>
-            </div>
-          ))}
-        </div>
 
         {/* ---------- THIS WEEK ---------- */}
         <section className="mt-11 no-print">
